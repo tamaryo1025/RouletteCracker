@@ -108,7 +108,7 @@ def process_video(input_video_path, output_video_path, background_image_path, ma
 
 # 使用例
 if __name__ == "__main__":
-    input_video_path = '../media/videos/ball2.mp4'
+    input_video_path = '../media/videos/ball.mp4'
     output_video_path = '../media/result/detected_ball_video.mp4'
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_directory = f'../media/result_{current_time}/'
