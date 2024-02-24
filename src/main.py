@@ -108,16 +108,16 @@ def process_video(input_video_path, output_video_path, background_image_path, ma
 
 # 使用例
 if __name__ == "__main__":
-    input_video_path = '../media/videos/ball.mp4'
-    output_video_path = '../media/result/detected_ball_video.mp4'
+    input_video_path = '../media/videos/RouletteVideo_20240224.mp4'
+    input_video_name = os.path.splitext(os.path.basename(input_video_path))[0]
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_directory = f'../media/result_{current_time}/'
+    output_directory = f'../media/result/result_{current_time}/'
     os.makedirs(output_directory, exist_ok=True)
-    output_video_path = f'{output_directory}detected_ball_video.mp4'
-    background_image_path = '../media/images/frame_279.jpg'
-    mask_image_path = '../media/images/frame_mask.jpg'
-    rect_top_left = (350, 70)
-    rect_bottom_right = (400, 100)
+    output_video_path = f'{output_directory}detect_{input_video_name}.mp4'
+    background_image_path = '../media/frame/RouletteVideo_20240224/frame_0.jpg'
+    mask_image_path = '../media/frame/RouletteVideo_20240224/frame_mask_2.jpg'
+    rect_top_left = (1400, 480)
+    rect_bottom_right = (1550, 570)
     diameter_cm = 50
 
     process_video(input_video_path, output_video_path, background_image_path, mask_image_path, rect_top_left, rect_bottom_right, diameter_cm)
