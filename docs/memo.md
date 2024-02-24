@@ -29,3 +29,5 @@ branch : develop_newvideo
 | 2024-02-24   |動画に対象の画角からの動画のみが含まれるわけではないため、それ以外の画像の時を判定するプログラムを作成する必要がある。→ 現状は動画のトリミングで暫定対処。||
 
 ## 参考リンク
+- PythonでOCRを実装する方法
+    - https://dev.classmethod.jp/articles/ocr-on-a-mac-device-with-pytesseract/
