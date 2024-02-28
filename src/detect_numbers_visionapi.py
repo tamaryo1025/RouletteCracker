@@ -34,7 +34,11 @@ def request_cloud_vison_api(image_base64, api_url):
             }]
         }]
     })
+    start_time = datetime.now()  # 時間計測開始
     res = requests.post(api_url, data=req_body)
+    end_time = datetime.now()  # 時間計測終了
+    duration = (end_time - start_time).total_seconds()  # 処理時間を秒単位で計算
+    print(f"Vision APIの応答時間: {duration}秒")  # 処理時間を出力
     return res.json()
 
 def process_image(image_path, top_left, bottom_right, secrets_path='../secrets/secrets.txt'):

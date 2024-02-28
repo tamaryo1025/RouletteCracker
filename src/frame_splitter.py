@@ -52,5 +52,5 @@ def split_video_into_frames(video_path):
 
 # 使用例
 if __name__ == "__main__":
-    video_path = '../media/videos/RouletteVideo_20240224.mp4'
+    video_path = '../media/videos/RouletteVideo_20240225.mov'
     split_video_into_frames(video_path)
