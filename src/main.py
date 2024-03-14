@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 from datetime import datetime
+from util import crop_roulette_area,find_numbers_in_image,save_roulette_data
 
 def load_images(background_image_path, mask_image_path):
     """
@@ -65,15 +66,15 @@ def calculate_speed(last_enter_frame, frame_number, fps, diameter_cm):
     return speed
 
 def process_video(input_video_path, output_video_path, background_image_path, mask_image_path, rect_top_left, rect_bottom_right, diameter_cm):
-    """
-    動画を処理するメイン関数。動きを検出し、特定の領域を通過するオブジェクトの速度を計算する。
-    """
     background_image, mask_image = load_images(background_image_path, mask_image_path)
     gray_background, mask = preprocess_images(background_image, mask_image)
     cap, out, fps, frame_width, frame_height = setup_video_io(input_video_path, output_video_path)
 
     last_enter_frame = None
     latest_speed = 0
+    found_numbers_data = []  # 分析結果を保存するためのリストを初期化
+
+    numbers_to_find = ["10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37"]
 
     while True:
         ret, target_image = cap.read()
@@ -94,6 +95,12 @@ def process_video(input_video_path, output_video_path, background_image_path, ma
                     if last_enter_frame is not None:
                         latest_speed = calculate_speed(last_enter_frame, frame_number, fps, diameter_cm)
                     last_enter_frame = frame_number
+                    
+                    cropped_image = crop_roulette_area(target_image, (826, 570), (1370, 640), frame_number, save=True, save_dir="../media/frame_cropped/")
+                    found_numbers, found_vertices = find_numbers_in_image(f"../media/frame_cropped/roulette_area_{frame_number}.jpg", numbers_to_find, '../secrets/secrets.txt')
+                    # 分析結果をリストに追加
+                    if found_numbers:
+                        found_numbers_data.append((frame_number, found_numbers, found_vertices))
 
         # 速度テキストを画像に追加
         speed_text = f"速度: {latest_speed:.2f} cm/s"
@@ -106,18 +113,34 @@ def process_video(input_video_path, output_video_path, background_image_path, ma
     out.release()
     cv2.destroyAllWindows()
 
+    # 分析結果をCSVファイルに保存
+    execution_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_roulette_data(input_video_name, found_numbers_data, execution_time)
+
+
 # 使用例
 if __name__ == "__main__":
-    input_video_path = '../media/videos/RouletteVideo_20240224.mp4'
+    # 入力ビデオのパスを設定
+    input_video_path = '../media/videos/RouletteVideo_20240313.mp4'
+    # 入力ビデオのファイル名を取得
     input_video_name = os.path.splitext(os.path.basename(input_video_path))[0]
+    # 現在の時刻を取得
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # 出力ディレクトリのパスを設定
     output_directory = f'../media/result/result_{current_time}/'
+    # 出力ディレクトリを作成（既に存在する場合は何もしない）
     os.makedirs(output_directory, exist_ok=True)
+    # 出力ビデオのパスを設定
     output_video_path = f'{output_directory}detect_{input_video_name}.mp4'
+    # 背景画像のパスを設定
     background_image_path = '../media/frame/RouletteVideo_20240224/frame_0.jpg'
+    # マスク画像のパスを設定
     mask_image_path = '../media/frame/RouletteVideo_20240224/frame_mask_2.jpg'
-    rect_top_left = (1400, 480)
-    rect_bottom_right = (1550, 570)
+    # 検出領域の左上の座標を設定
+    rect_top_left = (1670, 550)
+    # 検出領域の右下の座標を設定
+    rect_bottom_right = (1800, 650)
+    # 物体の直径（cm）を設定
     diameter_cm = 50
 
     process_video(input_video_path, output_video_path, background_image_path, mask_image_path, rect_top_left, rect_bottom_right, diameter_cm)
