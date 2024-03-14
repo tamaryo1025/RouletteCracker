@@ -1,11 +1,41 @@
+import cv2
+import os
+from datetime import datetime
 import requests
 import base64
 import json
 import io
 import os
-import cv2
 import glob
-from datetime import datetime
+import csv
+
+def crop_roulette_area(image, top_left, bottom_right, frame_number, save=False, save_dir="../media/frame_cropped/"):
+    """
+    指定された座標で画像オブジェクトをクロップし、オプションで指定されたディレクトリに特定のフォーマットで保存する関数。
+    
+    :param image: クロップする画像オブジェクト
+    :param top_left: クロップする領域の左上の座標 (x, y)
+    :param bottom_right: クロップする領域の右下の座標 (x, y)
+    :param frame_number: フレーム番号
+    :param save: 画像を保存するかどうかのフラグ
+    :param save_dir: 画像を保存するディレクトリのパス
+    :return: クロップされた画像
+    """
+    
+    # 画像をクロップする
+    cropped_image = image[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
+    
+    if save:
+        # 保存するファイル名を生成する
+        new_name = f"roulette_area_{frame_number}.jpg"
+        os.makedirs(save_dir, exist_ok=True)  # ディレクトリがなければ作成
+        save_path = os.path.join(save_dir, new_name)
+        
+        # クロップした画像を保存する
+        cv2.imwrite(save_path, cropped_image)
+        print(f"保存しました: {save_path}")
+    
+    return cropped_image
 
 def load_api_settings(secrets_path='../../secrets/secrets.txt'):
     with open(secrets_path) as f:
@@ -37,7 +67,7 @@ def request_cloud_vison_api(image_base64, api_url):
     except requests.exceptions.Timeout:
         return None
 
-def crop_and_save_image(image_path, vertices, number, save_dir='./images/'):
+def crop_and_save_image(image_path, vertices, number, save_dir='../media/number_cropped/'):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
     
@@ -62,10 +92,12 @@ def find_numbers_in_image(image_path, numbers_to_find, secrets_path='../../secre
     result = request_cloud_vison_api(img_base64, api_url)
 
     if result is None:
-        print("API request failed.")
-        return []
+        print("APIリクエストに失敗しました。")
+        return [], []
 
     found_numbers = []
+    found_vertices = []
+    center_coordinates = []
 
     for number_to_find in numbers_to_find:
         closest_area_diff = float('inf')
@@ -87,21 +119,37 @@ def find_numbers_in_image(image_path, numbers_to_find, secrets_path='../../secre
                             closest_vertices = vertices
 
             if closest_vertices:
+                x_center = (min(x_coords) + max(x_coords)) / 2
+                y_center = (min(y_coords) + max(y_coords)) / 2
+                center_coordinates.append((x_center, y_center))
                 crop_and_save_image(image_path, closest_vertices, number_to_find)
                 if number_to_find not in found_numbers:
                     found_numbers.append(number_to_find)
+                    found_vertices.append(closest_vertices)
+                print(center_coordinates)
 
-    if not found_numbers:
-        print("No specified numbers found in the image.")
-    else:
-        print(f"Found and saved images for numbers: {', '.join(found_numbers)}")
-    return found_numbers
+    return found_numbers, center_coordinates
 
-def main():
-    image_paths = glob.glob('../../media/frame_cropped/*.png')
-    numbers_to_find = ["10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37"]
-    for image_path in image_paths:
-        find_numbers_in_image(image_path, numbers_to_find)
-
-if __name__ == "__main__":
-    main()
+def save_roulette_data(video_name, found_numbers_data, execution_time, output_dir='../media/csv/'):
+    """
+    ルーレットの分析結果をCSVファイルに保存する関数。
+    
+    :param video_name: 分析された動画の名前
+    :param found_numbers_data: 分析結果のデータ。各要素は (フレーム数, 発見された数字のリスト, 座標のリスト) のタプル。
+    :param execution_time: 実行時刻
+    :param output_dir: CSVを保存するディレクトリのパス
+    """
+    os.makedirs(output_dir, exist_ok=True)  # ディレクトリがなければ作成
+    file_path = os.path.join(output_dir, f"analyze_roulette_data_{video_name}_{execution_time}.csv")
+    
+    with open(file_path, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(['フレーム数', '発見された数字', '座標'])
+        
+        for frame_number, numbers, vertices in found_numbers_data:
+            # 座標リストを文字列に変換
+            vertices_str = '; '.join([f"({x}, {y})" for x, y in vertices])
+            # CSVに書き込み
+            writer.writerow([frame_number, ', '.join(numbers), vertices_str])
+    
+    print(f"CSVファイルを保存しました: {file_path}")
