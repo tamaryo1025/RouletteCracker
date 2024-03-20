@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from datetime import datetime
 from util import crop_roulette_area,find_numbers_in_image,save_roulette_data
+import time
 
 def load_images(background_image_path, mask_image_path):
     """
@@ -80,7 +81,6 @@ def process_video(input_video_path, output_video_path, background_image_path, ma
         ret, target_image = cap.read()
         if not ret:
             break
-
         frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
         contours = detect_movement(gray_background, target_image, mask)
         max_contour = find_largest_contour(contours)
@@ -96,16 +96,14 @@ def process_video(input_video_path, output_video_path, background_image_path, ma
                         latest_speed = calculate_speed(last_enter_frame, frame_number, fps, diameter_cm)
                     last_enter_frame = frame_number
                     
-                    cropped_image = crop_roulette_area(target_image, (826, 570), (1370, 640), frame_number, save=True, save_dir="../media/frame_cropped/")
-                    found_numbers, found_vertices = find_numbers_in_image(f"../media/frame_cropped/roulette_area_{frame_number}.jpg", numbers_to_find, '../secrets/secrets.txt')
-                    # 分析結果をリストに追加
+                    cropped_image = crop_roulette_area(target_image, (820, 570), (1370, 640), frame_number, save=True, save_dir="../media/frame_cropped/")
+                    found_numbers, found_vertices, found_angles = find_numbers_in_image(f"../media/frame_cropped/roulette_area_{frame_number}.jpg", numbers_to_find, (820, 570), secrets_path='../secrets/secrets.txt')
                     if found_numbers:
-                        found_numbers_data.append((frame_number, found_numbers, found_vertices))
+                        found_numbers_data.append((frame_number, found_numbers, found_vertices, found_angles))  # 角度の情報を含める
 
         # 速度テキストを画像に追加
         speed_text = f"速度: {latest_speed:.2f} cm/s"
         cv2.putText(target_image, speed_text, (10, frame_height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-
         out.write(target_image)
 
     # リソースの解放
@@ -121,7 +119,7 @@ def process_video(input_video_path, output_video_path, background_image_path, ma
 # 使用例
 if __name__ == "__main__":
     # 入力ビデオのパスを設定
-    input_video_path = '../media/videos/RouletteVideo_20240313.mp4'
+    input_video_path = '../media/videos/RouletteVideo_20240225.mov'
     # 入力ビデオのファイル名を取得
     input_video_name = os.path.splitext(os.path.basename(input_video_path))[0]
     # 現在の時刻を取得
