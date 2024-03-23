@@ -96,7 +96,7 @@ def crop_and_save_image(image_path, vertices,adjusted_vertices, number, save_dir
 
     # 保存する画像名に切り抜いた画像の座標を含める
     save_path = os.path.join(save_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_{number}_({modify_vertices_center(vertices,adjusted_vertices)[0]},{modify_vertices_center(vertices,adjusted_vertices)[1]})_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
-    # cv2.imwrite(save_path, cropped_image)
+    cv2.imwrite(save_path, cropped_image)
 
 def find_numbers_in_image(image_path, numbers_to_find, adjusted_vertices ,secrets_path='../secrets/secrets.txt'):
     google_cloud_vision_api_url, api_key = load_api_settings(secrets_path)
@@ -161,6 +161,60 @@ def save_roulette_data(video_name, found_numbers_data, execution_time, output_di
     
     print(f"CSVファイルを保存しました: {file_path}")
 
+# def save_roulette_data_streaming(video_name, frame_number, found_numbers, found_vertices, found_angles, execution_time, output_dir='../media/csv/'):
+#     os.makedirs(output_dir, exist_ok=True)
+#     file_path = os.path.join(output_dir, f"analyze_roulette_data_{video_name}_{execution_time}.csv")
+    
+#     with open(file_path, mode='a', newline='', encoding='utf-8') as file:
+#         writer = csv.writer(file)
+#         if os.stat(file_path).st_size == 0:  # ファイルが空の場合、ヘッダーを追加
+#             writer.writerow(['フレーム数', '発見された数字', '座標', '角度'])
+        
+#         vertices_str = '; '.join([f"({x}, {y})" for x, y in found_vertices])
+#         angles_str = ', '.join([f"{angle:.2f}" for angle in found_angles])
+#         writer.writerow([frame_number, ', '.join(found_numbers), vertices_str, angles_str])
+
+# グローバル変数として前回書き込まれたフレーム数を初期化
+last_written_frame = -1001  # 初期値は-1001として、最初の書き込みが必ず行われるようにする
+
+def save_roulette_data_streaming(video_name, frame_number, found_numbers, found_vertices, found_angles,frame_image):
+    global last_written_frame  # グローバル変数を関数内で使用する宣言
+    
+    # 出力ディレクトリを指定
+    output_dir = '../media/csv/'
+    
+    # フレーム数が前回の書き込みから1000以上離れている場合、新しいファイル名を生成
+    if frame_number - last_written_frame >= 1000 or last_written_frame == -1001:
+        execution_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path = os.path.join(output_dir, f"analyze_roulette_data_{video_name}_{execution_time}.csv")
+        last_written_frame = frame_number  # 現在のフレーム数を記録
+        # 新しいCSVファイルが作成された時に実行
+        cropped_image = crop_roulette_area(frame_image, (0,0), (2160,1350), frame_number, save=False)
+        detected_texts = find_number_in_specified_area(cropped_image, top_left=(1550, 960), bottom_right=(1590, 980), secrets_path='../secrets/secrets.txt')
+        with open('result.txt', mode='a', encoding='utf-8') as file:
+            file.write(detected_texts + '\n')  # 座標と角度は空で追記
+    else:
+        # 最後に書き込まれたファイルを探す
+        list_of_files = glob.glob(f'{output_dir}analyze_roulette_data_{video_name}_*.csv')  # パターンにマッチするファイルのリストを取得
+        if list_of_files:
+            latest_file = max(list_of_files, key=os.path.getctime)  # 最新のファイルを取得
+            file_path = latest_file
+        else:
+            # 予期せぬ理由でファイルが見つからない場合は新しいファイルを作成
+            execution_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_path = os.path.join(output_dir, f"analyze_roulette_data_{video_name}_{execution_time}.csv")
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    with open(file_path, mode='a', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        if os.stat(file_path).st_size == 0:  # ファイルが空の場合、ヘッダーを追加
+            writer.writerow(['フレーム数', '発見された数字', '座標', '角度'])
+        
+        vertices_str = '; '.join([f"({x}, {y})" for x, y in found_vertices])
+        angles_str = ', '.join([f"{angle:.2f}" for angle in found_angles])
+        writer.writerow([frame_number, ', '.join(found_numbers), vertices_str, angles_str])
+
 def calculate_tilt_angle(long_axis, short_axis):
     """
     楕円の長軸と短軸の長さから、真上から見た時の傾いた角度θを求める関数。
@@ -219,3 +273,56 @@ def calculate_angle_with_tilt(cordinate, tilt_angle=74):
         angle_deg = -angle_deg
     
     return angle_deg
+
+def find_number_in_specified_area(image, top_left=(1550, 960), bottom_right=(1590, 980), secrets_path='../secrets/secrets.txt'):
+    """
+    指定された座標で囲まれる長方形内にある数字を読み取る。
+    
+    :param image: 読み取りを行う画像オブジェクト
+    :param top_left: 長方形の左上の座標 (x, y)
+    :param bottom_right: 長方形の右下の座標 (x, y)
+    :param secrets_path: APIキーが保存されているファイルのパス
+    :return: 検出されたテキストのリスト
+    """
+    # 画像をクロップする
+    cropped_image = image[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
+    
+    # クロップされた画像をbase64エンコードする
+    _, img_encoded = cv2.imencode('.jpg', cropped_image)
+    img_base64 = base64.b64encode(img_encoded).decode('utf-8')
+    
+    # API設定を読み込む
+    google_cloud_vision_api_url, api_key = load_api_settings(secrets_path)
+    api_url = f"{google_cloud_vision_api_url}{api_key}"
+    
+    # Cloud Vision APIにリクエストを送信
+    req_body = json.dumps({
+        'requests': [{
+            'image': {
+                'content': img_base64
+            },
+            'features': [{
+                'type': 'TEXT_DETECTION',
+                'maxResults': 10,
+            }]
+        }]
+    })
+    
+    try:
+        res = requests.post(api_url, data=req_body, timeout=0.9)
+        result = res.json()
+    except requests.exceptions.Timeout:
+        print("APIリクエストに失敗しました。")
+        return []
+    
+    # 検出されたテキストを抽出
+    detected_texts = []
+    if "textAnnotations" in result["responses"][0]:
+        for text_annotation in result["responses"][0]["textAnnotations"]:
+            detected_text = text_annotation["description"]
+            detected_texts.append(detected_text)
+    
+    if len(detected_texts)==0:
+        return "none"
+    
+    return detected_texts[-1]
