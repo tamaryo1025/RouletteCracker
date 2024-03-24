@@ -9,8 +9,37 @@ import os
 import glob
 import csv
 import numpy as np
+from PIL import Image
 
 def crop_roulette_area(image, top_left, bottom_right, frame_number, save=False, save_dir="../media/frame_cropped/"):
+    """
+    指定された座標で画像オブジェクトをクロップし、オプションで指定されたディレクトリに特定のフォーマットで保存する関数。
+    
+    :param image: クロップする画像オブジェクト
+    :param top_left: クロップする領域の左上の座標 (x, y)
+    :param bottom_right: クロップする領域の右下の座標 (x, y)
+    :param frame_number: フレーム番号
+    :param save: 画像を保存するかどうかのフラグ
+    :param save_dir: 画像を保存するディレクトリのパス
+    :return: クロップされた画像
+    """
+    
+    # 画像をクロップする
+    cropped_image = image[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
+    
+    if save:
+        # 保存するファイル名を生成する
+        new_name = f"roulette_area_{frame_number}.jpg"
+        os.makedirs(save_dir, exist_ok=True)  # ディレクトリがなければ作成
+        save_path = os.path.join(save_dir, new_name)
+        
+        # クロップした画像を保存する
+        cv2.imwrite(save_path, cropped_image)
+        print(f"保存しました: {save_path}")
+    
+    return cropped_image
+
+def crop_roulette_area_with_angle(image, top_left, bottom_right, frame_number, angle=0, save=False, save_dir="../media/frame_cropped/"):
     """
     指定された座標で画像オブジェクトをクロップし、オプションで指定されたディレクトリに特定のフォーマットで保存する関数。
     
@@ -98,7 +127,7 @@ def crop_and_save_image(image_path, vertices,adjusted_vertices, number, save_dir
     save_path = os.path.join(save_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}_{number}_({modify_vertices_center(vertices,adjusted_vertices)[0]},{modify_vertices_center(vertices,adjusted_vertices)[1]})_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
     cv2.imwrite(save_path, cropped_image)
 
-def find_numbers_in_image(image_path, numbers_to_find, adjusted_vertices ,secrets_path='../secrets/secrets.txt'):
+def find_numbers_in_image(image_path, numbers_to_find, adjusted_vertices ,center, secrets_path='../secrets/secrets.txt'):
     google_cloud_vision_api_url, api_key = load_api_settings(secrets_path)
     api_url = f"{google_cloud_vision_api_url}{api_key}"
 
@@ -127,7 +156,7 @@ def find_numbers_in_image(image_path, numbers_to_find, adjusted_vertices ,secret
                     y_coords = [vertex[1] for vertex in vertices]
                     area = (max(x_coords) - min(x_coords)) * (max(y_coords) - min(y_coords))
                     
-                    if area <= 5000:
+                    if area <= 100000000:
                         area_diff = abs(2000 - area)
                         if area_diff < closest_area_diff:
                             closest_area_diff = area_diff
@@ -140,7 +169,9 @@ def find_numbers_in_image(image_path, numbers_to_find, adjusted_vertices ,secret
                     found_vertices.append(closest_vertices)
                 center_coordinates.append(modify_vertices_center(closest_vertices,adjusted_vertices))
                 # 角度を計算してリストに追加
-                angle = calculate_angle_with_tilt(modify_vertices_center(closest_vertices,adjusted_vertices))
+                angle = calculate_angle_with_tilt(modify_vertices_center(closest_vertices,adjusted_vertices),center)
+                print(f"modify_center:{modify_vertices_center(closest_vertices,adjusted_vertices)}")
+                print(f"roulette_center:{center}")
                 found_angles.append(angle)
                 print(center_coordinates)
 
@@ -190,6 +221,8 @@ def save_roulette_data_streaming(video_name, frame_number, found_numbers, found_
         last_written_frame = frame_number  # 現在のフレーム数を記録
         # 新しいCSVファイルが作成された時に実行
         cropped_image = crop_roulette_area(frame_image, (0,0), (2160,1350), frame_number, save=False)
+
+        #最終結果の読み取り
         detected_texts = find_number_in_specified_area(cropped_image, top_left=(1550, 960), bottom_right=(1590, 980), secrets_path='../secrets/secrets.txt')
         with open('result.txt', mode='a', encoding='utf-8') as file:
             file.write(detected_texts + '\n')  # 座標と角度は空で追記
@@ -228,38 +261,32 @@ def calculate_tilt_angle(long_axis, short_axis):
 def convert_coordinates(x, y, theta):
     """
     傾いたカメラ座標での（x、y）の座標を真上から見た場合の座標（X ,Y)に変換する関数。
-    この時、カメラの中心と円の中心は70cmの距離があると仮定する。
-    
-    :param x: 傾いたカメラ座標でのx座標
-    :param y: 傾いたカメラ座標でのy座標
-    :param theta: 傾いた角度θ（ラジアン単位）
-    :return: 真上から見た場合の座標（X ,Y)
     """
-    # 中心との距離を保持しながら座標変換を行う
-    distance = 70  # 中心との距離(cm)
-    X = (x + distance * np.cos(theta)) * np.cos(theta) + (y + distance * np.sin(theta)) * np.sin(theta)
-    Y = -(x + distance * np.cos(theta)) * np.sin(theta) + (y + distance * np.sin(theta)) * np.cos(theta)
+    X = x
+    Y = + y / np.cos(theta)
     return X, Y
 
-def calculate_angle_with_tilt(cordinate, tilt_angle=74):
+def calculate_angle_with_tilt(cordinate, center, tilt_angle=74):
     """
     座標（x,y）と傾きが与えられた時の、基準ベクトルとの角度を算出する関数。マイナスの角度も考慮する。
     """
     
     # 中心座標を引いて調整
-    center_x = 1080
-    center_y = 740
+    # center_x = 1080
+    # center_y = 740
+    center_x = center[0]
+    center_y = center[1]
     adjusted_x = cordinate[0] - center_x
     adjusted_y = cordinate[1] - center_y
     
-    # 傾きを考慮して座標変換
-    theta = np.radians(tilt_angle)  # 度数法からラジアンに変換
-    X = adjusted_x
-    Y = + adjusted_y / np.cos(theta)
+    # # 傾きを考慮して座標変換
+    # theta = np.radians(tilt_angle)  # 度数法からラジアンに変換
+    # X = adjusted_x
+    # Y = + adjusted_y / np.cos(theta)
     
     # 基準ベクトルとの角度を計算
-    v1 = (0, -873)  # 基準ベクトル
-    v2 = (X, Y)  # 変換後の座標をベクトルとして
+    v1 = (0, -1)  # 基準ベクトル
+    v2 = (adjusted_x, adjusted_y)  # 変換後の座標をベクトルとして
     
     dot_product = np.dot(v1, v2)
     norm_v1 = np.linalg.norm(v1)
@@ -326,3 +353,27 @@ def find_number_in_specified_area(image, top_left=(1550, 960), bottom_right=(159
         return "none"
     
     return detected_texts[-1]
+
+def reshape_frame(target_image, angle=74):
+
+    image = target_image
+
+    # 画像のサイズを取得
+    height, width = image.shape[:2]
+
+    # 変換後の画像サイズを計算するために、四隅の座標を変換
+    corners = [(0, 0), (width-1, 0), (0, height-1), (width-1, height-1)]
+    converted_corners = [convert_coordinates(x, y, np.radians(angle)) for x, y in corners]
+    min_x = min([x for x, y in converted_corners])
+    max_x = max([x for x, y in converted_corners])
+    min_y = min([y for x, y in converted_corners])
+    max_y = max([y for x, y in converted_corners])
+
+    # 新しい画像のサイズを設定
+    new_width = int(max_x - min_x)
+    new_height = int(max_y - min_y)
+
+    # 元の画像を新しいサイズにリサイズ
+    resized_image = cv2.resize(image, (new_width, new_height))
+
+    return resized_image
